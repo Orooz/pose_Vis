@@ -1028,23 +1028,16 @@ void pose_Vis::init_frame(cgv::render::context& ctx)
 void pose_Vis::draw(cgv::render::context& ctx)
 {
 
-	SbViewportRegion myView(ctx.get_width(), ctx.get_height());
-	SoGLRenderAction myAction(myView);
+	GLint vp[4];
+	glGetIntegerv(GL_VIEWPORT, vp);
+	SbViewportRegion myView(vp[2], vp[3]);
+	myView.setViewportPixels(vp[0], vp[1], vp[2], vp[3]);
 	
+	SoGLRenderAction myAction(myView);
+	myAction.setTransparencyType(SoGLRenderAction::SCREEN_DOOR);
 	ctx.push_modelview_matrix();
 	mat4 P;
-	mat3 Q;
-	P.identity();
-	Q.identity();
-	quat q = quat(vec3(1, 0, 0), rl::math::DEG2RAD * 270);
-	q.put_homogeneous_matrix(P);
-	//myAction.apply(sc1->root);
-	for (int i=0; i < 3; i++) {
-		for (int j=0; j < 3; j++) {
-			P[i, j] = Q[i, j];
-		}
-	}
-	//rotation matrix ???
+	quat(vec3(1, 0, 0), rl::math::DEG2RAD * 270).put_homogeneous_matrix(P);
 	ctx.mul_modelview_matrix(P);
 	myAction.apply(sc1->root);
 	ctx.pop_modelview_matrix();
