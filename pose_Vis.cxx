@@ -30,6 +30,8 @@
 #include <rl/sg/solid/Scene.h>
 #include <Inventor/SoDB.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include <cgv_gl/arrow_renderer.h>
+#include <direct.h>
 
 using namespace std;
 
@@ -273,16 +275,20 @@ void pose_Vis::build_scene(float w, float d, float h, float W, float tw, float t
 pose_Vis::pose_Vis() 
 {
 	//init variable
-	x_length = -0.4115;
-	y_length = 0.1291;
-	z_length = 1.1348;
-	//x_length = 0;
-	//y_length = 0;
-	//z_length = 0;
+	//x_length = -0.4115;
+	//y_length = 0.1291;
+	//z_length = 1.1348;
+	x_length = -0.15;
+	y_length = 0.15;
+	z_length = 1.15;
 	a_length = 0;
 	b_length = 0;
 	c_length = 0;
-	//
+	//for arrow
+	ars.nr_subdivisions = 12;
+	ars.radius_lower_bound = 0.005f;
+	ars.radius_relative_to_length = 0.0;
+
 	frame_split = 0;
 	extent_texcrd = vec2(0.5f, 0.5f);
 	center_left  = vec2(0.5f,0.25f);
@@ -370,7 +376,7 @@ void pose_Vis::on_set(void* member_ptr)
 
 	vector<vector<double>> finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
 	
-
+	
 	//kinematics->calculateJacobian();
 
 
@@ -400,26 +406,45 @@ void pose_Vis::on_set(void* member_ptr)
 
 
 	size_t numberbody1 = sc2->getModel(0)->getNumBodies();
-	std::cout << isColliding << numberbody1 << std::endl;
+
+	//label_text = "isColliding";
+	//normal_cal
+	double cosa=cos(rl::math::DEG2RAD * -a_length);
+	double cosc=cos(rl::math::DEG2RAD * -c_length);
+	double sina =sin(rl::math::DEG2RAD * -a_length);
+	double sinc =sin(rl::math::DEG2RAD * -c_length);
+	vec3 nml = vec3(-sina*cosc, cosa * cosc, sinc);
+
+	std::cout << isColliding << nml << std::endl;
+
+	posedata.push_back(-x_length);
+	posedata.push_back(y_length);
+	posedata.push_back(z_length);
+	posedata.push_back(a_length);
+	posedata.push_back(b_length);
+	posedata.push_back(c_length);
 
 	if (finalres.at(0).at(3) == true) {
 		if(!isColliding){
 		label_text = "noColliding";
 		for (int i = 0; i < finalres.size(); ++i) {
+			posespace_data.push_back(posedata);
 			data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 			point_colors.push_back(rgb(1.f,1.f,1.f));
+			arc_normal.push_back(nml);
 			radi.push_back(0.03);
 			}
 		}
 		else {
-			if (std::find(data_position.begin(), data_position.end(), vec3(-x_length,z_length,-y_length)) != data_position.end()) {
-				
+			if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
 			}
 			else {
 				/* v does not contain x */
+				posespace_data.push_back(posedata);
 				for (int i = 0; i < finalres.size(); ++i) {
 					data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 					point_colors.push_back(rgb(1.f, 0.f, 0.f));
+					arc_normal.push_back(nml);
 					radi.push_back(0.03);
 				}
 				
@@ -428,18 +453,20 @@ void pose_Vis::on_set(void* member_ptr)
 	}else{
 		kinematics->setPosition(q);
 		kinematics->forwardPosition();
-		if (std::find(data_position.begin(), data_position.end(), vec3(-x_length, z_length, -y_length)) != data_position.end()) {
+		if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
 
 		}
 		else {
 		for (int i = 0; i < finalres.size(); ++i) {
+			posespace_data.push_back(posedata);
 			data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 			point_colors.push_back(rgb(0.f, 0.f, 0.f));
 			radi.push_back(0.03);
+			arc_normal.push_back(nml);
+			}
 		}
-		}
-		//label_text = "isColliding";
 	}
+	posedata.clear();
 	for (std::size_t i = 0; i < sc1->getModel(0)->getNumBodies(); ++i)
 	{
 		sc1->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
@@ -632,6 +659,10 @@ bool pose_Vis::init(cgv::render::context& ctx)
 	rl::mdl::XmlFactory factory;
 	//std::shared_ptr<rl::mdl::Model> model(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
 	std::shared_ptr<rl::mdl::Model> model(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
+	char buff[1000];
+	_getcwd(buff, sizeof(buff));
+	
+	//std::shared_ptr<rl::mdl::Model> model(factory.create("..\\data\\comau-racer-999.xml"));
 	//kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
 	kinematics = dynamic_cast<rl::mdl::Kinematic*>(model.get());
 	rl::mdl::JacobianInverseKinematics ik(kinematics);
@@ -642,6 +673,7 @@ bool pose_Vis::init(cgv::render::context& ctx)
 	for (int i = 0; i < finalres.size(); ++i) {
 		data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 		point_colors.push_back(rgb(finalres.at(i).at(3), finalres.at(i).at(3), finalres.at(i).at(3)));
+		arc_normal.push_back(vec3(0, 1, 0));
 		radi.push_back(0.03);
 	}
 	//render problems
@@ -745,9 +777,12 @@ bool pose_Vis::init(cgv::render::context& ctx)
 
 rl::math::Transform pose_Vis::setTransform(double x, double y, double z, double a, double b, double c) {
 	rl::math::Matrix33 rotationmatrix(
-		rl::math::AngleAxis(a * rl::math::DEG2RAD, rl::math::Vector3::UnitZ()) *
-		rl::math::AngleAxis(b * rl::math::DEG2RAD, rl::math::Vector3::UnitY()) *
-		rl::math::AngleAxis(c * rl::math::DEG2RAD, rl::math::Vector3::UnitZ())
+		//Um Z Drehen
+		rl::math::AngleAxis(a * rl::math::DEG2RAD, rl::math::Vector3::UnitY()) *
+		//Um X Drehen
+		rl::math::AngleAxis(-c * rl::math::DEG2RAD, rl::math::Vector3::UnitX()) *
+		//Um Y Drehen
+		rl::math::AngleAxis(b * rl::math::DEG2RAD, rl::math::Vector3::UnitZ())
 	);
 	rl::math::Transform rotation(rotationmatrix);
 	rl::math::Transform translation(rl::math::Translation(x, y, z));
@@ -1153,9 +1188,11 @@ void pose_Vis::draw(cgv::render::context& ctx)
 			}
 		}
 	}
+	/*
 	cgv::render::box_renderer& renderer = cgv::render::ref_box_renderer(ctx);
 
 	// draw dynamic boxes 
+	
 	renderer.set_render_style(movable_style);
 	renderer.set_box_array(ctx, movable_boxes);
 	renderer.set_color_array(ctx, movable_box_colors);
@@ -1173,7 +1210,7 @@ void pose_Vis::draw(cgv::render::context& ctx)
 	}
 	renderer.disable(ctx);
 
-	/*
+	
 	// draw static boxes
 	renderer.set_render_style(style);
 	renderer.set_box_array(ctx, boxes);
@@ -1190,6 +1227,7 @@ void pose_Vis::draw(cgv::render::context& ctx)
 		sr.set_render_style(srs);
 		sr.render(ctx, 0, intersection_points.size());
 	}
+	
 	/**
 		char buffer[256];
 		fstream outFile;
@@ -1232,18 +1270,40 @@ void pose_Vis::draw(cgv::render::context& ctx)
 		//SoDB::init();
 		//rl::sg::so::Scene sc1;
 		//sc1.load("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlsg\\unimation-puma560_boxes.xml");
+	
+		
+	// draw our point
 
+	//auto& ball = cgv::render::ref_sphere_renderer(ctx);
+	//ball.set_position_array(ctx, data_position);
+	//ball.set_color_array(ctx, point_colors);
+	//ball.set_render_style(srs);
+	//ball.set_radius_array(ctx, radi);
+	//ball.render(ctx, 0, data_position.size());
+
+	//if (ball.validate_and_enable(ctx)) {
+	//	glDrawArrays(GL_POINTS, 0, (GLsizei)data_position.size());
+	//	ball.disable(ctx);
+	//}
+	// draw arrow
+	/*
 	auto& ball = cgv::render::ref_sphere_renderer(ctx);
 	ball.set_position_array(ctx, data_position);
 	ball.set_color_array(ctx, point_colors);
 	ball.set_render_style(srs);
 	ball.set_radius_array(ctx, radi);
 	ball.render(ctx, 0, data_position.size());
-	//if (ball.validate_and_enable(ctx)) {
-	//	glDrawArrays(GL_POINTS, 0, (GLsizei)data_position.size());
-	//	ball.disable(ctx);
-	//}
+	*/
+	auto& ar = cgv::render::ref_arrow_renderer(ctx);
+	ars.length_scale = 0.05f;
+	ar.set_render_style(ars);
+	ar.set_position_array(ctx, data_position);
+	ar.set_direction_array(ctx, arc_normal);
+	ar.set_color_array(ctx, point_colors);
+	ar.render(ctx, 0, (GLsizei)data_position.size());
+
 	// draw label
+	/*
 	if (vr_view_ptr && label_tex.is_created()) {
 		cgv::render::shader_program& prog = ctx.ref_default_shader_program(true);
 		int pi = prog.get_position_index();
@@ -1271,6 +1331,7 @@ void pose_Vis::draw(cgv::render::context& ctx)
 		cgv::render::attribute_array_binding::disable_global_array(ctx, pi);
 		cgv::render::attribute_array_binding::disable_global_array(ctx, ti);
 	}
+	*/
 }
 
 void pose_Vis::finish_draw(cgv::render::context& ctx)
@@ -1320,9 +1381,9 @@ void pose_Vis::create_gui() {
 	add_member_control(this, "x_length", x_length, "value_slider", "min=-1;max=1;step=0.05;log=false;ticks=true");
 	add_member_control(this, "y_length", z_length, "value_slider", "min=-0.2;max=1.6;step=0.05;log=false;ticks=true");
 	add_member_control(this, "z_length", y_length, "value_slider", "min=-1;max=1;step=0.05;log=false;ticks=true");
-	add_member_control(this, "a_length", a_length, "value_slider", "min=-180;max=180;step=15;log=false;ticks=true");
-	add_member_control(this, "b_length", b_length, "value_slider", "min=-180;max=180;step=15;log=false;ticks=true");
-	add_member_control(this, "c_length", c_length, "value_slider", "min=-180;max=180;step=15;log=false;ticks=true");
+	add_member_control(this, "UM_Z", a_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
+	add_member_control(this, "UM_X", c_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
+	add_member_control(this, "Rotation", b_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
 
 
 	if(last_kit_handle) {
@@ -1411,6 +1472,12 @@ void pose_Vis::create_gui() {
 		add_member_control(this, "resolution", (cgv::type::DummyEnum&)label_resolution, "dropdown", "enums='256=256,512=512,1024=1024,2048=2048'");
 		align("\b");
 		end_tree_node(label_size);
+	}
+	if (begin_tree_node("arrow style", ars)) {
+		align("\a");
+		add_gui("arrows", ars);
+		align("\b");
+		end_tree_node(ars);
 	}
 }
 

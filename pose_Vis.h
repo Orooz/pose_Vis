@@ -25,6 +25,7 @@
 #include <rl/sg/solid/Scene.h>
 #include <Inventor/SoDB.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include <cgv_gl/arrow_renderer.h>
 using namespace std;
 ///@ingroup VR
 ///@{
@@ -90,6 +91,10 @@ protected:
 	std::vector<vec3> data_position;
 	std::vector<float> radi;
 	std::vector<rgb>  point_colors;
+	std::vector<vector<double>> posespace_data;
+	std::vector<double> posedata;
+	cgv::render::arrow_render_style ars;
+	std::vector<vec3> arc_normal;
 
 
 
