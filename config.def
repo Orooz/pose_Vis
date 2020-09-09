@@ -44,7 +44,7 @@ type(vr_wall):stereo_window_mode=0
 // 3 ... fullscreen on monitors 1 + 2, 4 ... fullscreen on monitor 3, 5 ... fullscreen on monitors 1 + 3
 type(vr_wall):fullscreen=1
 type(vr_wall):creation_width=1920;creation_height=1080
-type(vr_wall):vr_wall_kit_index=0
+//type(vr_wall):vr_wall_kit_index=0
 type(vr_wall):vr_wall_hmd_index=2
 // how much eyes are below tracker
 type(vr_wall):eye_downset=0.07 (in meters)
@@ -75,10 +75,10 @@ name(vr interactor):blit_vr_views=false;blit_width=400;blit_aspect_scale=1.3
 //name(vr interactor):calibration_file_path="C:/develop/git/cgv/plugins/vr_test/table.cal"
 
 persistent
-name(vr interactor):tracking_rotation=-25
-name(vr interactor):tracking_origin_x=-0.666567;
-name(vr interactor):tracking_origin_y=0.15;
-name(vr interactor):tracking_origin_z=-2;
-name(vr interactor):tracking_rotation_origin_x=-0.15;
-name(vr interactor):tracking_rotation_origin_y=0.723464;
-name(vr interactor):tracking_rotation_origin_z=2
+name(vr interactor):tracking_rotation=0
+name(vr interactor):tracking_origin_x=-0.49504;
+name(vr interactor):tracking_origin_y=0.964443;
+name(vr interactor):tracking_origin_z=0.493292;
+name(vr interactor):tracking_rotation_origin_x=1.32803;
+name(vr interactor):tracking_rotation_origin_y=0.818692;
+name(vr interactor):tracking_rotation_origin_z=1.79564

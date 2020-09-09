@@ -87,6 +87,11 @@ protected:
 	float a_length;
 	float b_length;
 	float c_length;
+	vec3 controll1_pos;
+	vec3 controll2_pos;
+	mat3 controll1_rot;
+	vec3 controll2_rot;
+	bool controll_handel;
 
 	std::vector<vec3> data_position;
 	std::vector<float> radi;
@@ -221,6 +226,7 @@ public:
 
 	void create_gui();
 
+	vec3 calAngle(mat3 orientation);
 	rl::math::Transform setTransform(double x, double y, double z, double a, double b, double c);
 	vector<vector<double>> calEbene(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
 	vector<vector<double>> calLine(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);

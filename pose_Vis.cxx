@@ -284,6 +284,12 @@ pose_Vis::pose_Vis()
 	a_length = 0;
 	b_length = 0;
 	c_length = 0;
+	controll1_pos;
+	controll2_pos;
+
+	controll1_rot;
+	controll2_rot;
+	controll_handel=false;
 	//for arrow
 	ars.nr_subdivisions = 12;
 	ars.radius_lower_bound = 0.005f;
@@ -414,7 +420,7 @@ void pose_Vis::on_set(void* member_ptr)
 	double sina =sin(rl::math::DEG2RAD * -a_length);
 	double sinc =sin(rl::math::DEG2RAD * -c_length);
 	vec3 nml = vec3(-sina*cosc, cosa * cosc, sinc);
-
+	
 	std::cout << isColliding << nml << std::endl;
 
 	posedata.push_back(-x_length);
@@ -475,7 +481,8 @@ void pose_Vis::on_set(void* member_ptr)
 	update_member(member_ptr);
 	post_redraw();
 }
-	
+
+
 bool pose_Vis::handle(cgv::gui::event& e)
 {
 	// check if vr event flag is not set and don't process events in this case
@@ -492,7 +499,135 @@ bool pose_Vis::handle(cgv::gui::event& e)
 				std::cout << "grip button " << (vrke.get_controller_index() == 0 ? "left":"right") << " controller pressed" << std::endl;
 				return true;
 			case vr::VR_DPAD_RIGHT:
+				
 				std::cout << "touch pad of " << (vrke.get_controller_index() == 0 ? "left" : "right") << " controller pressed at right direction" << std::endl;
+				std::cout << controll1_pos;
+				vec3 angle = calAngle(controll1_rot);
+				
+				x_length = -(float)controll1_pos[0];
+				y_length = -(float)controll1_pos[2];
+				z_length = (float)controll1_pos[1];
+				a_length = -angle[0];
+				b_length = angle[2];
+				c_length = -angle[1];
+
+				std::cout << "x_length:" << x_length<<"?????";
+				std::cout << "y_length:" << y_length << "?????";
+				std::cout << "z_length:" << z_length << "?????";
+				rl::math::Vector q(3);
+				q << 0, 0, 0;
+				rl::mdl::XmlFactory factory;
+				kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
+				rl::mdl::JacobianInverseKinematics ik(kinematics);
+				vector<vector<double>> finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+				//vector<vector<double>> finalres = calPonit((float)controll1_pos[0], (float)controll1_pos[1], -(float)controll1_pos[2], a_length, b_length, c_length, ik);
+				if (finalres.at(0).at(3) == true) {
+					for (std::size_t i = 0; i < sc2->getModel(0)->getNumBodies(); ++i)
+					{
+						sc2->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
+					}
+				}
+
+				bool isColliding = false;
+				for (size_t i = 1; i < sc2->getModel(0)->getNumBodies(); i++) {
+					bool areColliding = dynamic_cast<rl::sg::SimpleScene*>(sc2)->areColliding(
+						sc2->getModel(0)->getBody(i), sc2->getModel(1)->getBody(0)
+					);
+					isColliding = isColliding || areColliding;
+				}
+
+				size_t numberbody1 = sc2->getModel(0)->getNumBodies();
+
+				//label_text = "isColliding";
+				//normal_cal
+				double cosz = cos(rl::math::DEG2RAD * -a_length);
+				double cosx = cos(rl::math::DEG2RAD * -c_length);
+				double sinz = sin(rl::math::DEG2RAD * -a_length);
+				double sinx = sin(rl::math::DEG2RAD * -c_length);
+				double cosy = cos(rl::math::DEG2RAD * -b_length);
+				double siny = sin(rl::math::DEG2RAD * -b_length);
+				
+				vec3 nml = vec3(-sinz * cosx, cosz * cosx, sinx);
+				//vec3 nml2 = -vec3(cosz, sinz , 0);
+				//vec3 nml3 = vec3(cosz*cosy+sinz*sinx*cosy,sinz*cosy-cosz*sinx*siny,siny*cosx);
+				vec3 nml2 = vec3(sinz * sinx, -cosz * sinx, cosx);
+				vec3 nml3 = -vec3(-siny * cosz+sinz*sinx*cosy, -cosz * siny-cosz*sinx*cosy, cosx*cosy);
+
+				std::cout << isColliding << nml << std::endl;
+
+				posedata.push_back(-x_length);
+				posedata.push_back(y_length);
+				posedata.push_back(z_length);
+				posedata.push_back(a_length);
+				posedata.push_back(b_length);
+				posedata.push_back(c_length);
+
+				if (finalres.at(0).at(3) == true) {
+					if (!isColliding) {
+						label_text = "noColliding";
+						for (int i = 0; i < finalres.size(); ++i) {
+							posespace_data.push_back(posedata);
+							data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+							point_colors.push_back(rgb(0.f, 1.f, 0.f));
+							arc_normal.push_back(nml);
+							data_position.push_back(vec3(finalres.at(i).at(0)+ ars.length_scale *nml[0], finalres.at(i).at(1)+ ars.length_scale * nml[1], finalres.at(i).at(2)+ ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.f, 1.f));
+							arc_normal.push_back(nml2);
+							data_position.push_back(vec3(finalres.at(i).at(0)+ ars.length_scale *nml[0], finalres.at(i).at(1)+ ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(1.f, 1.f, 1.f));
+							arc_normal.push_back(nml3);
+							radi.push_back(0.03);
+						}
+					}
+					else {
+						if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
+						}
+						else {
+							/* v does not contain x */
+							posespace_data.push_back(posedata);
+							for (int i = 0; i < finalres.size(); ++i) {
+								data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+								point_colors.push_back(rgb(0.f, 1.f, 0.f));
+								arc_normal.push_back(nml);
+								data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+								point_colors.push_back(rgb(0.f, 0.f, 1.f));
+								arc_normal.push_back(nml2);
+								data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+								point_colors.push_back(rgb(1.f, 0.f, 0.f));
+								arc_normal.push_back(nml3);
+								radi.push_back(0.03);
+							}
+
+						}
+					}
+				}
+				else {
+					kinematics->setPosition(q);
+					kinematics->forwardPosition();
+					if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
+
+					}
+					else {
+						for (int i = 0; i < finalres.size(); ++i) {
+							posespace_data.push_back(posedata);
+							data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+							point_colors.push_back(rgb(0.f, 1.f, 0.f));
+							arc_normal.push_back(nml);
+							data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.f, 1.f));
+							arc_normal.push_back(nml2);
+							data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.f, 0.f));
+							arc_normal.push_back(nml3);
+							radi.push_back(0.03);
+						}
+					}
+				}
+				posedata.clear();
+				for (std::size_t i = 0; i < sc1->getModel(0)->getNumBodies(); ++i)
+				{
+					sc1->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
+				}
 				return true;
 			}
 		}
@@ -512,10 +647,14 @@ bool pose_Vis::handle(cgv::gui::event& e)
 		case cgv::gui::SA_TOUCH:
 			if (state[vrse.get_controller_index()] == IS_OVER)
 				state[vrse.get_controller_index()] = IS_GRAB;
+			std::cout << "touch";
+			controll_handel = true;
 			break;
 		case cgv::gui::SA_RELEASE:
 			if (state[vrse.get_controller_index()] == IS_GRAB)
 				state[vrse.get_controller_index()] = IS_OVER;
+			controll_handel = false;
+			std::cout << "untouch";
 			break;
 		case cgv::gui::SA_PRESS:
 		case cgv::gui::SA_UNPRESS:
@@ -540,6 +679,13 @@ bool pose_Vis::handle(cgv::gui::event& e)
 		cgv::gui::vr_pose_event& vrpe = static_cast<cgv::gui::vr_pose_event&>(e);
 		// check for controller pose events
 		int ci = vrpe.get_trackable_index();
+		//if(ci==1)
+		if (controll_handel == true) {
+			controll1_pos = vrpe.get_position();
+			controll1_rot = vrpe.get_orientation();
+		}
+		
+		
 		if (ci != -1) {
 			if (state[ci] == IS_GRAB) {
 				// in grab mode apply relative transformation to grabbed boxes
@@ -896,6 +1042,45 @@ vector<vector<double>> pose_Vis::calPonit(double x, double y, double z, double a
 	res.clear();
 	return finalres;
 };
+
+cgv::render::render_types::vec3 pose_Vis::calAngle(mat3 orientation) {
+	double r00 = orientation.row(0)[0];
+	double r01 = orientation.row(0)[1];
+	double r02 = orientation.row(0)[2];
+	double r11 = orientation.row(1)[1];
+	double r20 = orientation.row(2)[0];
+	double r21 = orientation.row(2)[1];
+	double r22 = orientation.row(2)[2];
+	double thetaX;
+	double thetaY;
+	double thetaZ;
+	if(r21<+1)
+	{
+		if(r21>-1)
+		{
+			thetaX = asin(r21);
+			thetaZ = atan2(-r01,r11);
+			thetaY = atan2(-r20,r22);
+		}
+		else // r21=-1
+		{
+			// Not aunique solution : thetaY-thetaZ = atan2(r02,r00)
+			thetaX = -M_PI /2;
+			thetaZ = -atan2(r02,r00);
+			thetaY = 0;
+		}
+	}
+	else // r 2 1 = +1
+	{
+		// Not aunique solution : thetaY + thetaZ = atan2(r02,r00)
+		thetaX = +M_PI / 2;
+		thetaZ = atan2(r02,r00);
+		thetaY = 0;
+	}
+	return vec3(rl::math::RAD2DEG * thetaZ, rl::math::RAD2DEG * thetaX, rl::math::RAD2DEG * thetaY);
+};
+
+
 
 
 void pose_Vis::clear(cgv::render::context& ctx)
