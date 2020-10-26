@@ -274,19 +274,26 @@ void pose_Vis::build_scene(float w, float d, float h, float W, float tw, float t
 
 pose_Vis::pose_Vis() 
 {
+	std::vector<rgb> tri_color;
+	std::vector<vec3> tri_normal;
+	std::vector<vec3> tri_position;
+	cgv::media::mesh::simple_mesh<float>* conwayMesh;
+	std::vector<vec3> arc_position;
+	std::vector<rgb>  arc_colors;
+	std::vector<vec3> arc_direction;
 	//init variable
 	//x_length = -0.4115;
 	//y_length = 0.1291;
 	//z_length = 1.1348;
-	x_length = -0.15;
-	y_length = 0.15;
-	z_length = 1.15;
+	x_length = -0.2;
+	y_length = 0.2;
+	z_length = 1.0;
 	a_length = 0;
-	b_length = 0;
+	b_length = 45;
 	c_length = 0;
 	controll1_pos;
 	controll2_pos;
-
+	controllcase = 0;
 	controll1_rot;
 	controll2_rot;
 	controll_handel=false;
@@ -294,6 +301,11 @@ pose_Vis::pose_Vis()
 	ars.nr_subdivisions = 12;
 	ars.radius_lower_bound = 0.005f;
 	ars.radius_relative_to_length = 0.0;
+
+	conwayar.nr_subdivisions = 12;
+	conwayar.radius_lower_bound = 0.001f;
+	conwayar.radius_relative_to_length = 0.0;
+	conwayar.head_length_relative_to_radius = 2.0f;
 
 	frame_split = 0;
 	extent_texcrd = vec2(0.5f, 0.5f);
@@ -376,16 +388,120 @@ void pose_Vis::on_set(void* member_ptr)
 	//kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
 	kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
 	rl::mdl::JacobianInverseKinematics ik(kinematics);
-	//rl::mdl::NloptInverseKinematics ik(kinematics);
-	//std::cout << "rl::mdl::JacobianInverseKinematics";
-	//ik.duration = std::chrono::milliseconds(10);
 
-	vector<vector<double>> finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+
+	conwayMesh = new cgv::media::mesh::simple_mesh<float>("tI");
+	mat3 conwaytf;
+	vec3 conwaytl;
+	conwaytf.identity();
+	conwaytf = conwaytf * 0.05f;
+	conwaytl = vec3(-x_length,z_length,-y_length);
+	conwayMesh->transform(conwaytf, conwaytl);
+
+
+	//vector<vector<double>> finalres;
 	
+	for (int face = 0; face < conwayMesh->get_nr_faces(); face++) {
+		vec3 center = vec3(0.f, 0.f, 0.f);
+		int polynumber = 0;
+		for (int i = conwayMesh->begin_corner(face); i < conwayMesh->end_corner(face); i++) {
+			center += conwayMesh->position(conwayMesh->c2p(i));
+		}
+		polynumber = conwayMesh->end_corner(face) - conwayMesh->begin_corner(face);
+		center = center / polynumber;
+
+		vec3 arcnormal = center - conwaytl;
+		vec3 ynormal = center - conwaytl;
+		ynormal.normalize();
+		float aroundx;
+		float aroundz;
+
+		if (ynormal[2] == -1) {
+			aroundx =-M_PI/2;
+			aroundz = 0;
+		}else if (ynormal[2] == 1) {
+			aroundx = M_PI/2;
+			aroundz = 0;
+		}else{
+			if (ynormal[1]>0){
+				aroundx = asin(ynormal[2]);
+				aroundz= atan(-ynormal[0]/ynormal[1]);
+			}
+			else if (ynormal[1]<0) {
+				aroundx = asin(ynormal[2]);
+				aroundz = atan(-ynormal[0] / ynormal[1]) + M_PI;
+			}
+			else {
+				aroundx = asin(ynormal[2]);
+				if (ynormal[0] > 0) {
+					aroundz = -M_PI / 2;
+				}
+				else {
+					aroundz = M_PI / 2;
+				}
+			}
+		}
+
+		
+		arc_position.push_back(center);
+		arc_colors.push_back(rgb(0.f, 0.f, 1.f));
+		
+
+		vec3 arcnml = vec3(sin(aroundz) * sin(aroundx), -cos(aroundz) * sin(aroundx), cos(aroundx));
+		vec3 startp=conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face)));
+		vec3 secondp= conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face)+1));
+		vec3 znormal = (startp + secondp) / 2 - center;
+		float aroundfirsty = atan2(dot(cross(arcnml, znormal), ynormal), dot(arcnml, znormal));
+		//vec3 arcnml = vec3(-sin(aroundz) * cos(aroundx), cos(aroundz) * cos(aroundx), sin(aroundx));
+		//vec3 arcnml = ynormal;
+		arc_direction.push_back(arcnml);
+
+		float aroundy;
+		for (int i = conwayMesh->begin_corner(face); i < conwayMesh->end_corner(face) - 1; i++) {
+			tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i)));
+			tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i + 1)));
+			tri_position.push_back(center);
+			tri_normal.push_back(center - conwaytl);
+			//todooo
+			aroundy=(i - conwayMesh->begin_corner(face))*2 * M_PI/(conwayMesh->end_corner(face)- conwayMesh->begin_corner(face)) +aroundfirsty;
+
+			vector<double> conwayresult = calPoint(-x_length,y_length,z_length,-aroundx*rl::math::RAD2DEG,aroundy * rl::math::RAD2DEG,-aroundz * rl::math::RAD2DEG,ik);
+			
+			//cout<<"x:"<<x_length<<"y:"<<y_length<<"z:"<<z_length<<"ax"<<aroundx<<"ay"<<aroundy<<"az"<<aroundz<<"ik"<<conwayresult[3]<<endl;
+			
+			if (conwayresult[3] == 0) {
+				tri_color.push_back(rgb(0.f, 0.f, 0.f));
+			}
+			if (conwayresult[3] == 1) {
+				tri_color.push_back(rgb(1.f, 1.f, 1.f));
+			}
+			if (conwayresult[3] == 2) {
+				tri_color.push_back(rgb(1.f, 0.f, 0.f));
+			};
+			
+
+		}
+		tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->end_corner(face) - 1)));
+		tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face))));
+		tri_position.push_back(center);
+		tri_normal.push_back(center - conwaytl);
+		aroundy = (conwayMesh->end_corner(face) - conwayMesh->begin_corner(face) - 1) * 2*M_PI / (conwayMesh->end_corner(face) - conwayMesh->begin_corner(face)) + aroundfirsty;
+		vector<double> conwayresult = calPoint(-x_length,y_length,z_length, -aroundx * rl::math::RAD2DEG, aroundy * rl::math::RAD2DEG,-aroundz * rl::math::RAD2DEG, ik);
+		cout << "x:" << x_length << "y:" << y_length << "z:" << z_length << "ax" << aroundx << "ay" << aroundy << "az" << aroundz << "ik" << conwayresult[3] << endl;
+		if (conwayresult[3] == 0) {
+			tri_color.push_back(rgb(0.f, 0.f, 0.f));
+		}
+		if (conwayresult[3] == 1) {
+			tri_color.push_back(rgb(1.f, 1.f, 1.f));
+		}
+		if (conwayresult[3] == 2) {
+			tri_color.push_back(rgb(1.f, 0.f, 0.f));
+		};
+		//tri_color.push_back(rgb(1.f, 0.f, 0.f));
+	}
 	
-	//kinematics->calculateJacobian();
-
-
+	//vector<vector<double>> finalres = calEbene(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+	vector<vector<double>> finalres = setPoint(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
 	rl::math::Vector q(3);
 	q << 0, 0, 0;
 	/*
@@ -394,90 +510,89 @@ void pose_Vis::on_set(void* member_ptr)
 	bool result = ik.solve();
 	ik.goals.clear();
 	*/
-	if (finalres.at(0).at(3) == true) {
-		for (std::size_t i = 0; i < sc2->getModel(0)->getNumBodies(); ++i)
-		{
-			sc2->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
-		}
-	}
 
-	bool isColliding = false;
-
-	for (size_t i = 1; i < sc2->getModel(0)->getNumBodies(); i++) {
-		bool areColliding = dynamic_cast<rl::sg::SimpleScene*>(sc2)->areColliding(
-			sc2->getModel(0)->getBody(i), sc2->getModel(1)->getBody(0)
-		);
-		isColliding = isColliding || areColliding;
-	}
-
-
-	size_t numberbody1 = sc2->getModel(0)->getNumBodies();
+	//size_t numberbody1 = sc2->getModel(0)->getNumBodies();
 
 	//label_text = "isColliding";
 	//normal_cal
-	double cosa=cos(rl::math::DEG2RAD * -a_length);
-	double cosc=cos(rl::math::DEG2RAD * -c_length);
-	double sina =sin(rl::math::DEG2RAD * -a_length);
-	double sinc =sin(rl::math::DEG2RAD * -c_length);
-	vec3 nml = vec3(-sina*cosc, cosa * cosc, sinc);
-	
-	std::cout << isColliding << nml << std::endl;
+	/*
+	for (int i = 0; i < finalres.size(); ++i) {
+		double cosz = cos(rl::math::DEG2RAD * -finalres.at(i).at(4));
+		double cosx = cos(rl::math::DEG2RAD * -finalres.at(i).at(6));
+		double sinz = sin(rl::math::DEG2RAD * -finalres.at(i).at(4));
+		double sinx = sin(rl::math::DEG2RAD * -finalres.at(i).at(6));
+		double cosy = cos(rl::math::DEG2RAD * finalres.at(i).at(5));
+		double siny = sin(rl::math::DEG2RAD * finalres.at(i).at(5));
+		vec3 nml = vec3(-sinz * cosx, cosz * cosx, sinx);
+		//vec3 nml2 = -vec3(cosz, sinz , 0);
+		//vec3 nml3 = vec3(cosz*cosy+sinz*sinx*cosy,sinz*cosy-cosz*sinx*siny,siny*cosx);
+		//std::cout << isColliding << nml << std::endl;
+		vec3 nml2 = vec3(sinz * sinx, -cosz * sinx, cosx);
+		vec3 nml3 = vec3(siny * cosz + sinz * sinx * cosy, sinz * siny - cosz * sinx * cosy, cosx * cosy);
 
-	posedata.push_back(-x_length);
-	posedata.push_back(y_length);
-	posedata.push_back(z_length);
-	posedata.push_back(a_length);
-	posedata.push_back(b_length);
-	posedata.push_back(c_length);
-
-	if (finalres.at(0).at(3) == true) {
-		if(!isColliding){
-		label_text = "noColliding";
-		for (int i = 0; i < finalres.size(); ++i) {
+		posedata.push_back(finalres.at(i).at(0));
+		posedata.push_back(finalres.at(i).at(1));
+		posedata.push_back(finalres.at(i).at(2));
+		posedata.push_back(finalres.at(i).at(4));
+		posedata.push_back(finalres.at(i).at(5));
+		posedata.push_back(finalres.at(i).at(6));
+		
+		if (finalres.at(i).at(3) == 1) {
+			//label_text = "noColliding";
 			posespace_data.push_back(posedata);
 			data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
-			point_colors.push_back(rgb(1.f,1.f,1.f));
+			point_colors.push_back(rgb(0.f, 1.f, 0.f));
 			arc_normal.push_back(nml);
-			radi.push_back(0.03);
-			}
+			data_position.push_back(vec3(finalres.at(i).at(0) + 1.1*ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1*ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+			point_colors.push_back(rgb(0.f, 0.f, 1.f));
+			arc_normal.push_back(nml2);
+			data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+			point_colors.push_back(rgb(1.f, 1.f, 1.f));
+			arc_normal.push_back(nml3);
+			//radi.push_back(0.03);
 		}
-		else {
+		if (finalres.at(i).at(3) == 2) {
+			if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {}
+			else {
+				posespace_data.push_back(posedata);
+				data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+				point_colors.push_back(rgb(0.f, 1.f, 0.f));
+				arc_normal.push_back(nml);
+				data_position.push_back(vec3(finalres.at(i).at(0) + 1.1 * ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1 * ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+				point_colors.push_back(rgb(0.f, 0.f, 1.f));
+				arc_normal.push_back(nml2);
+				data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+				point_colors.push_back(rgb(1.f, 0.f, 0.f));
+				arc_normal.push_back(nml3);
+				//radi.push_back(0.03);
+			}
+		}else{
+			kinematics->setPosition(q);
+			kinematics->forwardPosition();
 			if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
 			}
 			else {
-				/* v does not contain x */
 				posespace_data.push_back(posedata);
-				for (int i = 0; i < finalres.size(); ++i) {
-					data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
-					point_colors.push_back(rgb(1.f, 0.f, 0.f));
-					arc_normal.push_back(nml);
-					radi.push_back(0.03);
-				}
-				
+				data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+				point_colors.push_back(rgb(0.f, 1.f, 0.f));
+				arc_normal.push_back(nml);
+				data_position.push_back(vec3(finalres.at(i).at(0) + 1.1 * ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1 * ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+				point_colors.push_back(rgb(0.f, 0.f, 1.f));
+				arc_normal.push_back(nml2);
+				data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+				point_colors.push_back(rgb(0.f, 0.0f, 0.f));
+				arc_normal.push_back(nml3);
+				//radi.push_back(0.03);
 			}
 		}
-	}else{
-		kinematics->setPosition(q);
-		kinematics->forwardPosition();
-		if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
-
-		}
-		else {
-		for (int i = 0; i < finalres.size(); ++i) {
-			posespace_data.push_back(posedata);
-			data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
-			point_colors.push_back(rgb(0.f, 0.f, 0.f));
-			radi.push_back(0.03);
-			arc_normal.push_back(nml);
-			}
-		}
+		posedata.clear();
 	}
-	posedata.clear();
+	*/
+	vector<vector<double>> res = setPoint(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
 	for (std::size_t i = 0; i < sc1->getModel(0)->getNumBodies(); ++i)
 	{
 		sc1->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
 	}
-
 	update_member(member_ptr);
 	post_redraw();
 }
@@ -494,32 +609,236 @@ bool pose_Vis::handle(cgv::gui::event& e)
 	{
 		cgv::gui::vr_key_event& vrke = static_cast<cgv::gui::vr_key_event&>(e);
 		if (vrke.get_action() != cgv::gui::KA_RELEASE) {
+			vec3 angle = calAngle(controll1_rot);
+			
+			x_length = -(float)controll1_pos[0];
+			y_length = -(float)controll1_pos[2];
+			z_length = (float)controll1_pos[1];
+			if (controllcase == 1) {
+				x_length = ((int)(x_length * 10 + 0.5f))/1*0.1f;
+				y_length = ((int)(y_length * 10 + 0.5f))/1*0.1f;
+				z_length = ((int)(z_length * 10 + 0.5f))/1*0.1f;
+			}
+			a_length = -angle[0];
+			b_length = angle[2];
+			c_length = -angle[1];
+			rl::mdl::XmlFactory factory;
+			//kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
+			kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
+			rl::mdl::JacobianInverseKinematics ik(kinematics);
+			vector<vector<double>> finalres;
+			mat3 conwaytf;
+			vec3 conwaytl;
+			rl::math::Vector q(3);
+			q << 0, 0, 0;
+			//vector<vector<double>> finalres;
 			switch (vrke.get_key()) {
 			case vr::VR_GRIP:
 				std::cout << "grip button " << (vrke.get_controller_index() == 0 ? "left":"right") << " controller pressed" << std::endl;
 				return true;
-			case vr::VR_DPAD_RIGHT:
-				
-				std::cout << "touch pad of " << (vrke.get_controller_index() == 0 ? "left" : "right") << " controller pressed at right direction" << std::endl;
-				std::cout << controll1_pos;
-				vec3 angle = calAngle(controll1_rot);
-				
-				x_length = -(float)controll1_pos[0];
-				y_length = -(float)controll1_pos[2];
-				z_length = (float)controll1_pos[1];
-				a_length = -angle[0];
-				b_length = angle[2];
-				c_length = -angle[1];
+			case vr::VR_DPAD_DOWN:
+				posedata.clear();
+				posespace_data.clear();
+				data_position.clear();
+				point_colors.clear();
+				arc_normal.clear();
+				arc_position.clear();
+				arc_direction.clear();
+				arc_colors.clear();
+				tri_position.clear();
+				tri_color.clear();
+				tri_normal.clear();
+				return true;
+			case vr::VR_DPAD_LEFT:
+				conwayMesh = new cgv::media::mesh::simple_mesh<float>("tI");
+				conwaytf.identity();
+				conwaytf = conwaytf * 0.05f;
+				conwaytl = vec3(-x_length, z_length, -y_length);
+				conwayMesh->transform(conwaytf, conwaytl);
+				for (int face = 0; face < conwayMesh->get_nr_faces(); face++) {
+					vec3 center = vec3(0.f, 0.f, 0.f);
+					int polynumber = 0;
+					for (int i = conwayMesh->begin_corner(face); i < conwayMesh->end_corner(face); i++) {
+						center += conwayMesh->position(conwayMesh->c2p(i));
+					}
+					polynumber = conwayMesh->end_corner(face) - conwayMesh->begin_corner(face);
+					center = center / polynumber;
 
-				std::cout << "x_length:" << x_length<<"?????";
-				std::cout << "y_length:" << y_length << "?????";
-				std::cout << "z_length:" << z_length << "?????";
-				rl::math::Vector q(3);
-				q << 0, 0, 0;
-				rl::mdl::XmlFactory factory;
-				kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
-				rl::mdl::JacobianInverseKinematics ik(kinematics);
-				vector<vector<double>> finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+					vec3 arcnormal = center - conwaytl;
+					vec3 ynormal = center - conwaytl;
+					ynormal.normalize();
+					float aroundx;
+					float aroundz;
+
+					if (ynormal[2] == -1) {
+						aroundx = -M_PI / 2;
+						aroundz = 0;
+					}
+					else if (ynormal[2] == 1) {
+						aroundx = M_PI / 2;
+						aroundz = 0;
+					}
+					else {
+						if (ynormal[1] > 0) {
+							aroundx = asin(ynormal[2]);
+							aroundz = atan(-ynormal[0] / ynormal[1]);
+						}
+						else if (ynormal[1] < 0) {
+							aroundx = asin(ynormal[2]);
+							aroundz = atan(-ynormal[0] / ynormal[1]) + M_PI;
+						}
+						else {
+							aroundx = asin(ynormal[2]);
+							if (ynormal[0] > 0) {
+								aroundz = -M_PI / 2;
+							}
+							else {
+								aroundz = M_PI / 2;
+							}
+						}
+					}
+					arc_position.push_back(center);
+					arc_colors.push_back(rgb(0.f, 0.f, 1.f));
+					vec3 arcnml = vec3(sin(aroundz) * sin(aroundx), -cos(aroundz) * sin(aroundx), cos(aroundx));
+					vec3 startp = conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face)));
+					vec3 secondp = conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face) + 1));
+					vec3 znormal = (startp + secondp) / 2 - center;
+					float aroundfirsty = atan2(dot(cross(arcnml, znormal), ynormal), dot(arcnml, znormal));
+					//vec3 arcnml = vec3(-sin(aroundz) * cos(aroundx), cos(aroundz) * cos(aroundx), sin(aroundx));
+					//vec3 arcnml = ynormal;
+					arc_direction.push_back(arcnml);
+
+					float aroundy;
+					for (int i = conwayMesh->begin_corner(face); i < conwayMesh->end_corner(face) - 1; i++) {
+						tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i)));
+						tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i + 1)));
+						tri_position.push_back(center);
+						tri_normal.push_back(center - conwaytl);
+						//todooo
+						aroundy = (i - conwayMesh->begin_corner(face)) * 2 * M_PI / (conwayMesh->end_corner(face) - conwayMesh->begin_corner(face)) + aroundfirsty;
+
+						vector<double> conwayresult = calPoint(-x_length, y_length, z_length, -aroundx * rl::math::RAD2DEG, aroundy * rl::math::RAD2DEG, -aroundz * rl::math::RAD2DEG, ik);
+
+						//cout<<"x:"<<x_length<<"y:"<<y_length<<"z:"<<z_length<<"ax"<<aroundx<<"ay"<<aroundy<<"az"<<aroundz<<"ik"<<conwayresult[3]<<endl;
+
+						if (conwayresult[3] == 0) {
+							tri_color.push_back(rgb(0.f, 0.f, 0.f));
+						}
+						if (conwayresult[3] == 1) {
+							tri_color.push_back(rgb(1.f, 1.f, 1.f));
+						}
+						if (conwayresult[3] == 2) {
+							tri_color.push_back(rgb(1.f, 0.f, 0.f));
+						};
+
+
+					}
+					tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->end_corner(face) - 1)));
+					tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face))));
+					tri_position.push_back(center);
+					tri_normal.push_back(center - conwaytl);
+					aroundy = (conwayMesh->end_corner(face) - conwayMesh->begin_corner(face) - 1) * 2 * M_PI / (conwayMesh->end_corner(face) - conwayMesh->begin_corner(face)) + aroundfirsty;
+					vector<double> conwayresult = calPoint(-x_length, y_length, z_length, -aroundx * rl::math::RAD2DEG, aroundy * rl::math::RAD2DEG, -aroundz * rl::math::RAD2DEG, ik);
+					//cout << "x:" << x_length << "y:" << y_length << "z:" << z_length << "ax" << aroundx << "ay" << aroundy << "az" << aroundz << "ik" << conwayresult[3] << endl;
+					if (conwayresult[3] == 0) {
+						tri_color.push_back(rgb(0.f, 0.f, 0.f));
+					}
+					if (conwayresult[3] == 1) {
+						tri_color.push_back(rgb(1.f, 1.f, 1.f));
+					}
+					if (conwayresult[3] == 2) {
+						tri_color.push_back(rgb(1.f, 0.f, 0.f));
+					};
+					//tri_color.push_back(rgb(1.f, 0.f, 0.f));
+				}
+				setPoint(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+				for (std::size_t i = 0; i < sc1->getModel(0)->getNumBodies(); ++i)
+				{
+					sc1->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
+				}
+				return true;
+			case vr::VR_DPAD_RIGHT:
+				finalres = calEbene(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+				for (int i = 0; i < finalres.size(); ++i) {
+					double cosz = cos(rl::math::DEG2RAD * -finalres.at(i).at(4));
+					double cosx = cos(rl::math::DEG2RAD * -finalres.at(i).at(6));
+					double sinz = sin(rl::math::DEG2RAD * -finalres.at(i).at(4));
+					double sinx = sin(rl::math::DEG2RAD * -finalres.at(i).at(6));
+					double cosy = cos(rl::math::DEG2RAD * finalres.at(i).at(5));
+					double siny = sin(rl::math::DEG2RAD * finalres.at(i).at(5));
+					vec3 nml = vec3(-sinz * cosx, cosz * cosx, sinx);
+					//vec3 nml2 = -vec3(cosz, sinz , 0);
+					//vec3 nml3 = vec3(cosz*cosy+sinz*sinx*cosy,sinz*cosy-cosz*sinx*siny,siny*cosx);
+					//std::cout << isColliding << nml << std::endl;
+					vec3 nml2 = vec3(sinz * sinx, -cosz * sinx, cosx);
+					vec3 nml3 = vec3(siny * cosz + sinz * sinx * cosy, sinz * siny - cosz * sinx * cosy, cosx * cosy);
+
+					posedata.push_back(finalres.at(i).at(0));
+					posedata.push_back(finalres.at(i).at(1));
+					posedata.push_back(finalres.at(i).at(2));
+					posedata.push_back(finalres.at(i).at(4));
+					posedata.push_back(finalres.at(i).at(5));
+					posedata.push_back(finalres.at(i).at(6));
+
+					if (finalres.at(i).at(3) == 1) {
+						//label_text = "noColliding";
+						posespace_data.push_back(posedata);
+						data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+						point_colors.push_back(rgb(0.f, 1.f, 0.f));
+						arc_normal.push_back(nml);
+						data_position.push_back(vec3(finalres.at(i).at(0) + 1.1 * ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1 * ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+						point_colors.push_back(rgb(0.f, 0.f, 1.f));
+						arc_normal.push_back(nml2);
+						data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+						point_colors.push_back(rgb(1.f, 1.f, 1.f));
+						arc_normal.push_back(nml3);
+						//radi.push_back(0.03);
+					}
+					if (finalres.at(i).at(3) == 2) {
+						if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {}
+						else {
+							posespace_data.push_back(posedata);
+							data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+							point_colors.push_back(rgb(0.f, 1.f, 0.f));
+							arc_normal.push_back(nml);
+							data_position.push_back(vec3(finalres.at(i).at(0) + 1.1 * ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1 * ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.f, 1.f));
+							arc_normal.push_back(nml2);
+							data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(1.f, 0.f, 0.f));
+							arc_normal.push_back(nml3);
+							//radi.push_back(0.03);
+						}
+					}
+					else {
+						kinematics->setPosition(q);
+						kinematics->forwardPosition();
+						if (std::find(posespace_data.begin(), posespace_data.end(), posedata) != posespace_data.end()) {
+						}
+						else {
+							posespace_data.push_back(posedata);
+							data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
+							point_colors.push_back(rgb(0.f, 1.f, 0.f));
+							arc_normal.push_back(nml);
+							data_position.push_back(vec3(finalres.at(i).at(0) + 1.1 * ars.length_scale * nml[0], finalres.at(i).at(1) + 1.1 * ars.length_scale * nml[1], finalres.at(i).at(2) + 1.1 * ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.f, 1.f));
+							arc_normal.push_back(nml2);
+							data_position.push_back(vec3(finalres.at(i).at(0) + ars.length_scale * nml[0], finalres.at(i).at(1) + ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
+							point_colors.push_back(rgb(0.f, 0.0f, 0.f));
+							arc_normal.push_back(nml3);
+							//radi.push_back(0.03);
+						}
+					}
+					posedata.clear();
+				}
+				setPoint(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+				for (std::size_t i = 0; i < sc1->getModel(0)->getNumBodies(); ++i)
+				{
+					sc1->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
+				}
+				return true;
+			case vr::VR_DPAD_UP:				
+				finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
 				//vector<vector<double>> finalres = calPonit((float)controll1_pos[0], (float)controll1_pos[1], -(float)controll1_pos[2], a_length, b_length, c_length, ik);
 				if (finalres.at(0).at(3) == true) {
 					for (std::size_t i = 0; i < sc2->getModel(0)->getNumBodies(); ++i)
@@ -544,14 +863,14 @@ bool pose_Vis::handle(cgv::gui::event& e)
 				double cosx = cos(rl::math::DEG2RAD * -c_length);
 				double sinz = sin(rl::math::DEG2RAD * -a_length);
 				double sinx = sin(rl::math::DEG2RAD * -c_length);
-				double cosy = cos(rl::math::DEG2RAD * -b_length);
-				double siny = sin(rl::math::DEG2RAD * -b_length);
+				double cosy = cos(rl::math::DEG2RAD * b_length);
+				double siny = sin(rl::math::DEG2RAD * b_length);
 				
 				vec3 nml = vec3(-sinz * cosx, cosz * cosx, sinx);
 				//vec3 nml2 = -vec3(cosz, sinz , 0);
 				//vec3 nml3 = vec3(cosz*cosy+sinz*sinx*cosy,sinz*cosy-cosz*sinx*siny,siny*cosx);
 				vec3 nml2 = vec3(sinz * sinx, -cosz * sinx, cosx);
-				vec3 nml3 = -vec3(-siny * cosz+sinz*sinx*cosy, -cosz * siny-cosz*sinx*cosy, cosx*cosy);
+				vec3 nml3 = -vec3(siny*cosz-sinz*sinx*cosy, sinz*siny-cosz*sinx*cosy, cosx*cosy);
 
 				std::cout << isColliding << nml << std::endl;
 
@@ -570,7 +889,7 @@ bool pose_Vis::handle(cgv::gui::event& e)
 							data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 							point_colors.push_back(rgb(0.f, 1.f, 0.f));
 							arc_normal.push_back(nml);
-							data_position.push_back(vec3(finalres.at(i).at(0)+ ars.length_scale *nml[0], finalres.at(i).at(1)+ ars.length_scale * nml[1], finalres.at(i).at(2)+ ars.length_scale * nml[2]));
+							data_position.push_back(vec3(finalres.at(i).at(0)+ ars.length_scale*1.1*nml[0], finalres.at(i).at(1)+ ars.length_scale*1.1 * nml[1], finalres.at(i).at(2)+ ars.length_scale *1.1 * nml[2]));
 							point_colors.push_back(rgb(0.f, 0.f, 1.f));
 							arc_normal.push_back(nml2);
 							data_position.push_back(vec3(finalres.at(i).at(0)+ ars.length_scale *nml[0], finalres.at(i).at(1)+ ars.length_scale * nml[1], finalres.at(i).at(2) + ars.length_scale * nml[2]));
@@ -636,6 +955,30 @@ bool pose_Vis::handle(cgv::gui::event& e)
 	case cgv::gui::EID_THROTTLE:
 	{
 		cgv::gui::vr_throttle_event& vrte = static_cast<cgv::gui::vr_throttle_event&>(e);
+		if (vrte.get_value() == 0&&controllcase==0) {
+			controllcase = 0;
+		}
+		else if(vrte.get_value() != 0 && controllcase == 0){
+			controllcase = 2;
+		}
+		else if(vrte.get_value()== 0 && controllcase == 2){
+			controllcase = 1;
+		}
+		else if (vrte.get_value() != 0 && controllcase == 2) {
+			controllcase = 2;
+		}
+		else if (vrte.get_value() == 0 && controllcase == 1) {
+			controllcase = 1;
+		}
+		else if (vrte.get_value() != 0 && controllcase == 1) {
+			controllcase = 3;
+		}
+		else if (vrte.get_value() == 0 && controllcase == 3) {
+			controllcase = 0;
+		}
+		else {
+			controllcase = 3;
+		};
 		std::cout << "throttle " << vrte.get_throttle_index() << " of controller " << vrte.get_controller_index()
 			<< " adjusted from " << vrte.get_last_value() << " to " << vrte.get_value() << std::endl;
 		return true;
@@ -683,9 +1026,7 @@ bool pose_Vis::handle(cgv::gui::event& e)
 		if (controll_handel == true) {
 			controll1_pos = vrpe.get_position();
 			controll1_rot = vrpe.get_orientation();
-		}
-		
-		
+		}		
 		if (ci != -1) {
 			if (state[ci] == IS_GRAB) {
 				// in grab mode apply relative transformation to grabbed boxes
@@ -805,8 +1146,8 @@ bool pose_Vis::init(cgv::render::context& ctx)
 	rl::mdl::XmlFactory factory;
 	//std::shared_ptr<rl::mdl::Model> model(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
 	std::shared_ptr<rl::mdl::Model> model(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\comau-racer-999.xml"));
-	char buff[1000];
-	_getcwd(buff, sizeof(buff));
+	//char buff[1000];
+	//_getcwd(buff, sizeof(buff));
 	
 	//std::shared_ptr<rl::mdl::Model> model(factory.create("..\\data\\comau-racer-999.xml"));
 	//kinematics = dynamic_cast<rl::mdl::Kinematic*>(factory.create("C:\\Program Files\\Robotics Library\\0.7.0\\MSVC\\14.1\\x64\\share\\rl-0.7.0\\examples\\rlmdl\\unimation-puma560.xml"));
@@ -814,14 +1155,16 @@ bool pose_Vis::init(cgv::render::context& ctx)
 	rl::mdl::JacobianInverseKinematics ik(kinematics);
 	std::cout << "rl::mdl::JacobianInverseKinematics";
 	//ik.duration = std::chrono::milliseconds(1);
-
+	
 	vector<vector<double>> finalres = calPonit(-x_length, y_length, z_length, a_length, b_length, c_length, ik);
+	/*
 	for (int i = 0; i < finalres.size(); ++i) {
 		data_position.push_back(vec3(finalres.at(i).at(0), finalres.at(i).at(1), finalres.at(i).at(2)));
 		point_colors.push_back(rgb(finalres.at(i).at(3), finalres.at(i).at(3), finalres.at(i).at(3)));
 		arc_normal.push_back(vec3(0, 1, 0));
 		radi.push_back(0.03);
 	}
+	*/
 	//render problems
 	SoDB::init();
 	//rl::sg::so::Scene sc1;
@@ -918,6 +1261,34 @@ bool pose_Vis::init(cgv::render::context& ctx)
 		point_colors.push_back(rgb(finalres.at(i).at(3), finalres.at(i).at(3), finalres.at(i).at(3)));
 	}
 	*/
+	/*
+	for (int face = 0; face < conwayMesh->get_nr_faces(); face++) {
+		vec3 center=vec3(0.f,0.f,0.f);
+		int polynumber=0;
+		for (int i = conwayMesh->begin_corner(face); i<conwayMesh->end_corner(face); i++) {
+			center+=conwayMesh->position(conwayMesh->c2p(i));
+		}
+		polynumber= conwayMesh->end_corner(face)-conwayMesh->begin_corner(face);
+		center = center / polynumber;
+	
+		for (int i = conwayMesh->begin_corner(face); i < conwayMesh->end_corner(face)-1; i++) {
+			tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i)));
+			tri_position.push_back(conwayMesh->position(conwayMesh->c2p(i+1)));
+			tri_position.push_back(center);
+			tri_normal.push_back(center-conwaytl);
+			tri_color.push_back(rgb(1.f, 0.f, 0.f));
+		}
+		tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->end_corner(face)-1)));
+		tri_position.push_back(conwayMesh->position(conwayMesh->c2p(conwayMesh->begin_corner(face))));
+		tri_position.push_back(center);
+		tri_normal.push_back(center-conwaytl);
+		tri_color.push_back(rgb(1.f, 0.f, 0.f));
+	}
+	*/
+
+	//cout << "begincorner" << conwayMesh->begin_corner(0) << endl;
+	//cout << "endcorner" << conwayMesh->end_corner(0) << endl;
+	
 	return true;
 }
 
@@ -939,46 +1310,40 @@ rl::math::Transform pose_Vis::setTransform(double x, double y, double z, double 
 vector<vector<double>> pose_Vis::calEbene(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik) {
 	vector<vector<double>> finalres;
 	vector<double> res;
-	for (double x1 = -1.0; x1 < 1.0; x1 = x1 + 0.1) {
-		for (double y1 = -1.0; y1 < 1.0; y1 = y1 + 0.1) {
-			rl::math::Transform trans = setTransform(x1, y1, z, a, b, c);
-			ik.goals.push_back(::std::make_pair(trans, 0));
-			bool result = ik.solve();
-			ik.goals.clear();
-			res.push_back(x1);
-			res.push_back(y1);
-			res.push_back(z);
-			res.push_back(result);
+	for (double x1 = -1.0; x1 < 1.0; x1 = x1 + 0.2) {
+		for (double y1 = -1.0; y1 < 1.0; y1 = y1 + 0.2) {
+			res = calPoint(x1, y1, z, a, b, c, ik);
 			finalres.push_back(res);
 			res.clear();
 		}
 	};
-	for (double x1 = -1.0; x1 < 1.0; x1 = x1 + 0.1) {
-		for (double z1 = -0.2; z1 < 1.6; z1 = z1 + 0.1) {
-			rl::math::Transform trans = setTransform(x1, y, z1, a, b, c);
-			ik.goals.push_back(::std::make_pair(trans, 0));
-			bool result = ik.solve();
-			ik.goals.clear();
-			res.push_back(x1);
-			res.push_back(y);
-			res.push_back(z1);
-			res.push_back(result);
+	for (double x1 = -1.0; x1 < 1.0; x1 = x1 + 0.2) {
+		for (double z1 = -0.2; z1 < 1.6; z1 = z1 + 0.2) {
+			res = calPoint(x1, y, z1, a, b, c, ik);
 			finalres.push_back(res);
 			res.clear();
 		}
 	};
-	for (double y1 = -1.0; y1 < 1.0; y1 = y1 + 0.1) {
-		for (double z1 = -0.2; z1 < 1.6; z1 = z1 + 0.1) {
-			rl::math::Transform trans = setTransform(x, y1, z1, a, b, c);
-			ik.goals.push_back(::std::make_pair(trans, 0));
-			bool result = ik.solve();
-			ik.goals.clear();
-			res.push_back(x);
-			res.push_back(y1);
-			res.push_back(z1);
-			res.push_back(result);
+	for (double y1 = -1.0; y1 < 1.0; y1 = y1 + 0.2) {
+		for (double z1 = -0.2; z1 < 1.6; z1 = z1 + 0.2) {
+			res = calPoint(x, y1, z1, a, b, c, ik);
 			finalres.push_back(res);
 			res.clear();
+		}
+	};
+	return finalres;
+};
+
+vector<vector<double>> pose_Vis::calCube(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik) {
+	vector<vector<double>> finalres;
+	vector<double> res;
+	for (double a1 = 0; a1<=90; a1 = a1 + 90) {
+		for (double c1 = 0; c1 <= 270; c1 = c1 + 90) {
+			for (double b1 = 0; b1 <= 315; b1 = b1 + 45) {
+			res = calPoint(x, y, z, a1, b1, c1, ik);
+			finalres.push_back(res);
+			res.clear();
+			}
 		}
 	};
 	return finalres;
@@ -988,38 +1353,17 @@ vector<vector<double>> pose_Vis::calLine(double x, double y, double z, double a,
 	vector<vector<double>> finalres;
 	vector<double> res;
 	for (double x1 = -1.0; x1 < 1.0; x1 = x1 + 0.2) {
-		rl::math::Transform trans = setTransform(x1, y, z, a, b, c);
-		ik.goals.push_back(::std::make_pair(trans, 0));
-		bool result = ik.solve();
-		ik.goals.clear();
-		res.push_back(x1);
-		res.push_back(y);
-		res.push_back(z);
-		res.push_back(result);
+		res = calPoint(x1, y, z, a, b, c, ik);
 		finalres.push_back(res);
 		res.clear();
 	};
 	for (double y1 = -1.0; y1 < 1.0; y1 = y1 + 0.2) {
-		rl::math::Transform trans = setTransform(x, y1, z, a, b, c);
-		ik.goals.push_back(::std::make_pair(trans, 0));
-		bool result = ik.solve();
-		ik.goals.clear();
-		res.push_back(x);
-		res.push_back(y1);
-		res.push_back(z);
-		res.push_back(result);
+		res = calPoint(x, y1, z, a, b, c, ik);
 		finalres.push_back(res);
 		res.clear();
 	};
 	for (double z1 = -0.2; z1 < 1.6; z1 = z1 + 0.2) {
-		rl::math::Transform trans = setTransform(x, y, z1, a, b, c);
-		ik.goals.push_back(::std::make_pair(trans, 0));
-		bool result = ik.solve();
-		ik.goals.clear();
-		res.push_back(x);
-		res.push_back(y);
-		res.push_back(z1);
-		res.push_back(result);
+		res = calPoint(x, y, z1, a, b, c, ik);
 		finalres.push_back(res);
 		res.clear();
 	};
@@ -1041,6 +1385,63 @@ vector<vector<double>> pose_Vis::calPonit(double x, double y, double z, double a
 	finalres.push_back(res);
 	res.clear();
 	return finalres;
+};
+
+vector<vector<double>> pose_Vis::setPoint(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik) {
+	vector<vector<double>> finalres;
+	vector<double> res;
+	res = calPoint(x,y,z,a,b,c,ik);
+	finalres.push_back(res);
+	return finalres;
+};
+
+vector<double> pose_Vis::calPoint(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik) {
+	vector<double> res;
+	if ((x * x + y * y + z * z)>2) {
+		res.push_back(x);
+		res.push_back(z);
+		res.push_back(-y);
+		res.push_back(0);
+		res.push_back(a);
+		res.push_back(b);
+		res.push_back(c);
+	}
+	else {
+	rl::math::Transform trans = setTransform(x, y, z, a, b, c);
+	ik.goals.push_back(::std::make_pair(trans, 0));
+	bool result = ik.solve();
+	ik.goals.clear();
+
+	if (result == true) {
+		for (std::size_t i = 0; i < sc2->getModel(0)->getNumBodies(); ++i)
+		{
+			sc2->getModel(0)->getBody(i)->setFrame(kinematics->getFrame(i));
+		}
+	}
+	bool isColliding = false;
+	for (size_t i = 1; i < sc2->getModel(0)->getNumBodies(); i++) {
+		bool areColliding = dynamic_cast<rl::sg::SimpleScene*>(sc2)->areColliding(
+			sc2->getModel(0)->getBody(i), sc2->getModel(1)->getBody(0)
+		);
+		isColliding = isColliding || areColliding;
+	}
+	res.push_back(x);
+	res.push_back(z);
+	res.push_back(-y);
+	if (isColliding && result) {
+		res.push_back(2);
+	}
+	else if (!isColliding && result) {
+		res.push_back(1);
+	}
+	else {
+		res.push_back(0);
+	}
+	res.push_back(a);
+	res.push_back(b);
+	res.push_back(c);
+	}
+	return res;
 };
 
 cgv::render::render_types::vec3 pose_Vis::calAngle(mat3 orientation) {
@@ -1227,6 +1628,8 @@ void pose_Vis::draw(cgv::render::context& ctx)
 	myAction.apply(sc1->root);
 	ctx.pop_modelview_matrix();
 
+
+
 	if (MI.is_constructed()) {
 		dmat4 R;
 		mesh_orientation.put_homogeneous_matrix(R);
@@ -1366,8 +1769,15 @@ void pose_Vis::draw(cgv::render::context& ctx)
 			}
 		}
 	}
+	
+	
+	// draw conwayBall
+	
+	
+
 	/*
 	cgv::render::box_renderer& renderer = cgv::render::ref_box_renderer(ctx);
+	
 
 	// draw dynamic boxes 
 	
@@ -1394,7 +1804,7 @@ void pose_Vis::draw(cgv::render::context& ctx)
 	renderer.set_box_array(ctx, boxes);
 	renderer.set_color_array(ctx, box_colors);
 	renderer.render(ctx, 0, boxes.size());
-	*/
+	
 
 
 	// draw intersection points
@@ -1405,7 +1815,7 @@ void pose_Vis::draw(cgv::render::context& ctx)
 		sr.set_render_style(srs);
 		sr.render(ctx, 0, intersection_points.size());
 	}
-	
+	*/
 	/**
 		char buffer[256];
 		fstream outFile;
@@ -1473,12 +1883,20 @@ void pose_Vis::draw(cgv::render::context& ctx)
 	ball.render(ctx, 0, data_position.size());
 	*/
 	auto& ar = cgv::render::ref_arrow_renderer(ctx);
-	ars.length_scale = 0.05f;
+	ars.length_scale = 0.04f;
 	ar.set_render_style(ars);
 	ar.set_position_array(ctx, data_position);
 	ar.set_direction_array(ctx, arc_normal);
 	ar.set_color_array(ctx, point_colors);
 	ar.render(ctx, 0, (GLsizei)data_position.size());
+
+	auto& ca = cgv::render::ref_arrow_renderer(ctx);
+	conwayar.length_scale = 0.01f;
+	ca.set_render_style(conwayar);
+	ca.set_position_array(ctx, arc_position);
+	ca.set_direction_array(ctx, arc_direction);
+	ca.set_color_array(ctx, arc_colors);
+	ca.render(ctx, 0, (GLsizei)arc_position.size());
 
 	// draw label
 	/*
@@ -1510,8 +1928,29 @@ void pose_Vis::draw(cgv::render::context& ctx)
 		cgv::render::attribute_array_binding::disable_global_array(ctx, ti);
 	}
 	*/
+	//draw triangleball
+	drawTriangle(ctx);
 }
 
+void pose_Vis::drawTriangle(cgv::render::context& ctx) {
+	auto& prog = ctx.ref_surface_shader_program(false);
+	//glDisable(GL_CULL_FACE);
+	prog.enable(ctx);
+	prog.set_uniform(ctx, "culling_mode", (int)cgv::render::CM_OFF);
+	prog.set_uniform(ctx, "map_color_to_material", (int)cgv::render::CM_COLOR);
+	prog.set_uniform(ctx, "illumination_mode", (int)cgv::render::IM_TWO_SIDED);
+	cgv::render::attribute_array_binding::enable_global_array(ctx, prog.get_position_index());
+	cgv::render::attribute_array_binding::set_global_attribute_array(ctx, prog.get_position_index(), tri_position);
+	uint32_t first = 0;
+	for (unsigned ai = 0; ai < tri_position.size() / 3; ++ai) {
+		prog.set_attribute(ctx, prog.get_normal_index(), tri_normal[ai]);
+		prog.set_attribute(ctx, prog.get_color_index(), tri_color[ai]);
+		glDrawArrays(GL_TRIANGLE_FAN, first, 3);
+		first += 3;
+	}
+	cgv::render::attribute_array_binding::disable_global_array(ctx, prog.get_position_index());
+	prog.disable(ctx);
+}
 void pose_Vis::finish_draw(cgv::render::context& ctx)
 {
 	return;
@@ -1556,13 +1995,12 @@ void pose_Vis::create_gui() {
 	add_member_control(this, "show_seethrough", show_seethrough, "check");
 
 	//Setting of parameter
-	add_member_control(this, "x_length", x_length, "value_slider", "min=-1;max=1;step=0.05;log=false;ticks=true");
-	add_member_control(this, "y_length", z_length, "value_slider", "min=-0.2;max=1.6;step=0.05;log=false;ticks=true");
-	add_member_control(this, "z_length", y_length, "value_slider", "min=-1;max=1;step=0.05;log=false;ticks=true");
-	add_member_control(this, "UM_Z", a_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
-	add_member_control(this, "UM_X", c_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
-	add_member_control(this, "Rotation", b_length, "value_slider", "min=-180;max=180;step=72;log=false;ticks=true");
-
+	add_member_control(this, "x_length", x_length, "value_slider", "min=-1;max=1;step=0.2;log=false;ticks=true");
+	add_member_control(this, "y_length", z_length, "value_slider", "min=-0.2;max=1.6;step=0.2;log=false;ticks=true");
+	add_member_control(this, "z_length", y_length, "value_slider", "min=-1;max=1;step=0.2;log=false;ticks=true");
+	add_member_control(this, "theta_x", c_length, "value_slider", "min=-180;max=180;step=90;log=false;ticks=true");
+	add_member_control(this, "theta_y", b_length, "value_slider", "min=-180;max=180;step=45;log=false;ticks=true");
+	add_member_control(this, "theta_z", a_length, "value_slider", "min=-180;max=180;step=90;log=false;ticks=true");
 
 	if(last_kit_handle) {
 		add_decorator("cameras", "heading", "level=3");

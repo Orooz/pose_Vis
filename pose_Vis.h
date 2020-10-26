@@ -9,6 +9,7 @@
 #include <cgv_gl/rounded_cone_renderer.h>
 #include <cgv/render/frame_buffer.h>
 #include "intersection.h"
+#include <cgv/media/mesh/simple_mesh.h>
 #include <rl/math/Transform.h>
 #include <rl/math/Unit.h>
 #include <rl/mdl/Kinematic.h>
@@ -60,7 +61,6 @@ protected:
 	// rendering styles
 	cgv::render::box_render_style style;
 	cgv::render::rounded_cone_render_style cone_style;
-
 	// sample for rendering a mesh
 	double mesh_scale;
 	dvec3 mesh_location;
@@ -80,7 +80,7 @@ protected:
 	rl::sg::so::Scene* sc1;
 	rl::sg::solid::Scene* sc2;
 	rl::mdl::Kinematic* kinematics;
-
+	cgv::media::mesh::simple_mesh<float>* conwayMesh;
 	float x_length;
 	float y_length;
 	float z_length;
@@ -91,6 +91,7 @@ protected:
 	vec3 controll2_pos;
 	mat3 controll1_rot;
 	vec3 controll2_rot;
+	int controllcase;
 	bool controll_handel;
 
 	std::vector<vec3> data_position;
@@ -100,6 +101,15 @@ protected:
 	std::vector<double> posedata;
 	cgv::render::arrow_render_style ars;
 	std::vector<vec3> arc_normal;
+
+	cgv::render::arrow_render_style conwayar;
+	std::vector<vec3> arc_position;
+	std::vector<rgb>  arc_colors;
+	std::vector<vec3> arc_direction;
+
+	std::vector<rgb> tri_color;
+	std::vector<vec3> tri_normal;
+	std::vector<vec3> tri_position;
 
 
 
@@ -225,12 +235,16 @@ public:
 	void finish_draw(cgv::render::context& ctx);
 
 	void create_gui();
-
+	void drawTriangle(cgv::render::context& ctx);
 	vec3 calAngle(mat3 orientation);
 	rl::math::Transform setTransform(double x, double y, double z, double a, double b, double c);
 	vector<vector<double>> calEbene(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
 	vector<vector<double>> calLine(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
 	vector<vector<double>> calPonit(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
+	vector<double> calPoint(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
+	vector<vector<double>> setPoint(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
+	vector<vector<double>> setEbene(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
+	vector<vector<double>> calCube(double x, double y, double z, double a, double b, double c, rl::mdl::JacobianInverseKinematics ik);
 };
 
 ///@}

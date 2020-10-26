@@ -82,6 +82,7 @@ DEF room2 Transform {
 				Shape {
 					appearance Appearance {
 						material Material {
+							transparency 0.5
 						}
 					}
 					geometry Box {
@@ -96,6 +97,7 @@ DEF room2 Transform {
 				Shape {
 					appearance Appearance {
 						material Material {
+							transparency 0.5
 						}
 					}
 					geometry Box {
@@ -110,6 +112,7 @@ DEF room2 Transform {
 				Shape {
 					appearance Appearance {
 						material Material {
+							transparency 0.5
 						}
 					}
 					geometry Box {
